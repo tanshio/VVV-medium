@@ -1,6 +1,6 @@
 # Varying Vagrant Vagrants-medium
 
-add wordmove
+add wordmove  
 add other PC and mobile access
 
 Varying Vagrant Vagrants is an evolving [Vagrant](http://vagrantup.com) configuration focused on [WordPress](http://wordpress.org) development.
