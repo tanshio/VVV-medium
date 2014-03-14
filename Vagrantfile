@@ -80,6 +80,13 @@ Vagrant.configure("2") do |config|
   # If you are running more than one VM through VirtualBox, different subnets should be used
   # for those as well. This includes other Vagrant boxes.
   config.vm.network :private_network, ip: "192.168.50.4"
+    
+  # public_network
+  # mac ifconfig / win ipconfig 
+  # cd /srv/www/wordpress-default
+  # wp search-replace local.wordpress.dev 192.168.**.**
+  # Other PC and smartphone can access http://192.168.**.**/
+  #config.vm.network :public_network, ip: "192.168.**.**"
 
   # Drive mapping
   #
