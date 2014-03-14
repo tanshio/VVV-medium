@@ -57,6 +57,7 @@ apt_package_check_list=(
 	php5-curl
 	php-pear
 	php5-gd
+	php-apc
 
 	# nginx is installed as the default web server
 	nginx
@@ -201,7 +202,7 @@ if [[ $ping_result == *bytes?from* ]]; then
 		chmod +x composer.phar
 		mv composer.phar /usr/local/bin/composer
 
-		COMPOSER_HOME=/usr/local/src/composer composer -q global require --no-update phpunit/phpunit:4.0.*
+		COMPOSER_HOME=/usr/local/src/composer composer -q global require --no-update phpunit/phpunit:3.7.*
 		COMPOSER_HOME=/usr/local/src/composer composer -q global require --no-update phpunit/php-invoker:1.1.*
 		COMPOSER_HOME=/usr/local/src/composer composer -q global require --no-update mockery/mockery:0.8.*
 		COMPOSER_HOME=/usr/local/src/composer composer -q global require --no-update d11wtq/boris:v1.0.2
@@ -264,17 +265,15 @@ echo " * /srv/config/nginx-config/nginx-wp-common.conf -> /etc/nginx/nginx-wp-co
 echo " * /srv/config/nginx-config/sites/               -> /etc/nginx/custom-sites"
 
 # Copy php-fpm configuration from local
-cp /srv/config/php5-fpm-config/php5-fpm.conf /etc/php5/fpm/php5-fpm.conf
 cp /srv/config/php5-fpm-config/www.conf /etc/php5/fpm/pool.d/www.conf
 cp /srv/config/php5-fpm-config/php-custom.ini /etc/php5/fpm/conf.d/php-custom.ini
-cp /srv/config/php5-fpm-config/opcache.ini /etc/php5/fpm/conf.d/opcache.ini
 cp /srv/config/php5-fpm-config/xdebug.ini /etc/php5/fpm/conf.d/xdebug.ini
+cp /srv/config/php5-fpm-config/apc.ini /etc/php5/fpm/conf.d/apc.ini
 
-echo " * /srv/config/php5-fpm-config/php5-fpm.conf     -> /etc/php5/fpm/php5-fpm.conf"
 echo " * /srv/config/php5-fpm-config/www.conf          -> /etc/php5/fpm/pool.d/www.conf"
 echo " * /srv/config/php5-fpm-config/php-custom.ini    -> /etc/php5/fpm/conf.d/php-custom.ini"
-echo " * /srv/config/php5-fpm-config/opcache.ini       -> /etc/php5/fpm/conf.d/opcache.ini"
 echo " * /srv/config/php5-fpm-config/xdebug.ini        -> /etc/php5/fpm/conf.d/xdebug.ini"
+echo " * /srv/config/php5-fpm-config/apc.ini           -> /etc/php5/fpm/conf.d/apc.ini"
 
 # Copy memcached configuration from local
 cp /srv/config/memcached-config/memcached.conf /etc/memcached.conf
@@ -386,18 +385,6 @@ if [[ $ping_result == *bytes?from* ]]; then
 		echo "phpMemcachedAdmin already installed."
 	fi
 
-	# Checkout Opcache Status to provide a dashboard for viewing statistics
-	# about PHP's built in opcache.
-	if [[ ! -d /srv/www/default/opcache-status ]]; then
-		echo -e "\nDownloading Opcache Status, see https://github.com/rlerdorf/opcache-status/"
-		cd /srv/www/default
-		git clone https://github.com/rlerdorf/opcache-status.git opcache-status
-	else
-		echo -e "\nUpdating Opcache Status"
-		cd /srv/www/default/opcache-status
-		git pull --rebase origin master
-	fi
-
 	# Webgrind install (for viewing callgrind/cachegrind files produced by
 	# xdebug profiler)
 	if [[ ! -d /srv/www/default/webgrind ]]; then
@@ -433,10 +420,10 @@ if [[ $ping_result == *bytes?from* ]]; then
 	if [[ ! -d /srv/www/wordpress-default ]]; then
 		echo "Downloading WordPress Stable, see http://wordpress.org/"
 		cd /srv/www/
-		curl -O http://wordpress.org/latest.tar.gz
-		tar -xvf latest.tar.gz
+		curl -O http://ja.wordpress.org/latest-ja.tar.gz
+		tar -xvf latest-ja.tar.gz
 		mv wordpress wordpress-default
-		rm latest.tar.gz
+		rm latest-ja.tar.gz
 		cd /srv/www/wordpress-default
 		echo "Configuring WordPress Stable..."
 		wp core config --dbname=wordpress_default --dbuser=wp --dbpass=wp --quiet --extra-php --allow-root <<PHP
@@ -447,62 +434,6 @@ PHP
 		echo "Updating WordPress Stable..."
 		cd /srv/www/wordpress-default
 		wp core upgrade --allow-root 
-	fi
-
-	# Checkout, install and configure WordPress trunk via core.svn
-	if [[ ! -d /srv/www/wordpress-trunk ]]; then
-		echo "Checking out WordPress trunk from core.svn, see http://core.svn.wordpress.org/trunk"
-		svn checkout http://core.svn.wordpress.org/trunk/ /srv/www/wordpress-trunk
-		cd /srv/www/wordpress-trunk
-		echo "Configuring WordPress trunk..."
-		wp core config --dbname=wordpress_trunk --dbuser=wp --dbpass=wp --quiet --extra-php --allow-root <<PHP
-define( 'WP_DEBUG', true );
-PHP
-		wp core install --url=local.wordpress-trunk.dev --quiet --title="Local WordPress Trunk Dev" --admin_name=admin --admin_email="admin@local.dev" --admin_password="password" --allow-root 
-	else
-		echo "Updating WordPress trunk..."
-		cd /srv/www/wordpress-trunk
-		svn up --ignore-externals
-	fi
-
-	# Checkout, install and configure WordPress trunk via develop.svn
-	if [[ ! -d /srv/www/wordpress-develop ]]; then
-		echo "Checking out WordPress trunk from develop.svn, see http://develop.svn.wordpress.org/trunk"
-		svn checkout http://develop.svn.wordpress.org/trunk/ /srv/www/wordpress-develop
-		cd /srv/www/wordpress-develop/src/
-		echo "Configuring WordPress develop..."
-		wp core config --dbname=wordpress_develop --dbuser=wp --dbpass=wp --quiet --extra-php --allow-root <<PHP
-// Allow (src|build).wordpress-develop.dev to share the same database
-if ( 'build' == basename( dirname( __FILE__) ) ) {
-	define( 'WP_HOME', 'http://build.wordpress-develop.dev' );
-	define( 'WP_SITEURL', 'http://build.wordpress-develop.dev' );
-}
-
-define( 'WP_DEBUG', true );
-PHP
-		wp core install --url=src.wordpress-develop.dev --quiet --title="WordPress Develop" --admin_name=admin --admin_email="admin@local.dev" --admin_password="password" --allow-root 
-		cp /srv/config/wordpress-config/wp-tests-config.php /srv/www/wordpress-develop/
-		cd /srv/www/wordpress-develop/
-		npm install &>/dev/null
-	else
-		echo "Updating WordPress develop..."
-		cd /srv/www/wordpress-develop/
-		if [[ -e .svn ]]; then
-			svn up
-		else
-			if [[ $(git rev-parse --abbrev-ref HEAD) == 'master' ]]; then
-				git pull --no-edit git://develop.git.wordpress.org/ master
-			else
-				echo "Skip auto git pull on develop.git.wordpress.org since not on master branch"
-			fi
-		fi
-		npm install &>/dev/null
-	fi
-
-	if [[ ! -d /srv/www/wordpress-develop/build ]]; then
-		echo "Initializing grunt in WordPress develop... This may take a few moments."
-		cd /srv/www/wordpress-develop/
-		grunt
 	fi
 
 	# Download phpMyAdmin
@@ -520,6 +451,80 @@ PHP
 else
 	echo -e "\nNo network available, skipping network installations"
 fi
+
+# Ruby update
+    #
+
+    if [  "$(ruby -v|grep '1.8.7')" ]; then
+        echo "ruby1.8.7 installed"
+        apt-get install -y ruby1.9.3
+    else
+        echo "ruby1.9.3 installed"
+    fi
+
+    # Rubygems update
+    #
+    if [ $(gem -v|grep '^2.') ]; then
+        echo "gem installed"
+    else
+        echo "gem not installed"
+        gem install rubygems-update
+        update_rubygems
+    fi
+
+    # wordmove install
+    #exit
+    wordmove_install="$(gem list wordmove -i)"
+    if [ "$wordmove_install" = true ]; then
+        echo "wordmove installed"
+    else
+        echo "wordmove not installed"
+        gem install wordmove
+
+        wordmove_path="$(gem which wordmove | sed -s 's/.rb/\/deployer\/base.rb/')"
+        if [  "$(grep yaml $wordmove_path)" ]; then
+
+
+            echo "can require yaml"
+        else
+            echo "can't require yaml"
+            echo "set require yaml"
+
+            sed -i "7i require\ \'yaml\'" $wordmove_path
+
+            echo "can require yaml"
+            
+            if [[ -f /srv/www/wordpress-default/Movefile ]]; then
+            	echo "set movefile"
+            else
+            	cd /srv/www/wordpress-default
+            	wordmove init
+            	echo "init movefile"
+            fi
+
+        fi
+    fi
+
+    # sshpass install
+    #
+    if [  "$(which sshpass)" ]; then
+        echo "sshpass installed"
+    else
+        echo "sshpass not installed"
+        apt-get install sshpass
+        echo "sshpass installed"
+    fi
+
+    # lftp install
+    #
+    if [  "$(which lftp)" ]; then
+        echo "lftp installed"
+    else
+        echo "lftp not installed"
+        apt-get install lftp
+        echo "set ssl:verify-certificate no" > /home/vagrant/.lftprc
+        echo "lftp installed"
+    fi
 
 # Find new sites to setup.
 # Kill previously symlinked Nginx configs
