@@ -1,4 +1,4 @@
-# Varying Vagrant Vagrants
+# Varying Vagrant Vagrants-medium
 
 Varying Vagrant Vagrants is an evolving [Vagrant](http://vagrantup.com) configuration focused on [WordPress](http://wordpress.org) development.
 
