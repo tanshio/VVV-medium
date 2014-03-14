@@ -77,9 +77,7 @@ Immediate goals for VVV include:
     * Watch as the script ends, as an administrator or `su` ***password may be required*** to properly modify the hosts file on your local machine.
 1. Visit any of the following default sites in your browser:
     * [http://local.wordpress.dev/](http://local.wordpress.dev/) for WordPress stable
-    * [http://local.wordpress-trunk.dev/](http://local.wordpress-trunk.dev/) for WordPress trunk
-    * [http://src.wordpress-develop.dev/](http://src.wordpress-develop.dev/) for trunk WordPress development files
-    * [http://build.wordpress-develop.dev/](http://build.wordpress-develop.dev/) for the version of those development files built with Grunt
+ files built with Grunt
     * [http://vvv.dev/](http://vvv.dev/) for a default dashboard containing several useful tools
 
 Fancy, yeah?
@@ -124,15 +122,6 @@ All WordPress admin usernames and passwords for WordPress installations included
 * URL: `http://local.wordpress.dev`
 * DB Name: `wordpress_default`
 
-#### WordPress Trunk
-* URL: `http://local.wordpress-trunk.dev`
-* DB Name: `wordpress_trunk`
-
-#### WordPress Develop
-* /src URL: `http://src.wordpress-develop.dev`
-* /build URL: `http://build.wordpress-develop.dev`
-* DB Name: `wordpress_develop`
-* DB Name: `wordpress_unit_tests`
 
 #### MySQL Root
 * User: `root`
@@ -168,6 +157,7 @@ A bunch of stuff!
 1. [Webgrind](https://github.com/jokkedk/webgrind)
 1. [NodeJs](http://nodejs.org/) Current Stable Version
 1. [grunt-cli](https://github.com/gruntjs/grunt-cli) Current Stable Version
+1. [wordmove](https://github.com/welaika/wordmove) Current Stable Version
 
 ### Need Help?
 
