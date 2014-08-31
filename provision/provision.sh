@@ -458,9 +458,9 @@ if [[ $ping_result == *bytes?from* ]]; then
 
 	if [  "$(ruby -v|grep '1.8.7')" ]; then
 		echo "ruby1.8.7 installed"
-		apt-get install -y ruby1.9.3
+		apt-get install -y ruby-dev
 	else
-		echo "ruby1.9.3 installed"
+		echo "ruby-dev installed"
 	fi
 
 	# Rubygems update
