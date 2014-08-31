@@ -50,14 +50,12 @@ apt_package_check_list=(
 	# Extra PHP modules that we find useful
 	php5-memcache
 	php5-imagick
-	php5-xdebug
 	php5-mcrypt
 	php5-mysql
 	php5-imap
 	php5-curl
 	php-pear
 	php5-gd
-	php-apc
 
 	# nginx is installed as the default web server
 	nginx
@@ -149,18 +147,6 @@ if [[ $ping_result == *bytes?from* ]]; then
 		gpg -q --keyserver keyserver.ubuntu.com --recv-key ABF5BD827BD9BF62
 		gpg -q -a --export ABF5BD827BD9BF62 | apt-key add -
 
-		# Launchpad Subversion key EAA903E3A2F4C039
-		gpg -q --keyserver keyserver.ubuntu.com --recv-key EAA903E3A2F4C039
-		gpg -q -a --export EAA903E3A2F4C039 | apt-key add -
-
-		# Launchpad PHP key 4F4EA0AAE5267A6C
-		gpg -q --keyserver keyserver.ubuntu.com --recv-key 4F4EA0AAE5267A6C
-		gpg -q -a --export 4F4EA0AAE5267A6C | apt-key add -
-
-		# Launchpad git key A1715D88E1DF1F24
-		gpg -q --keyserver keyserver.ubuntu.com --recv-key A1715D88E1DF1F24
-		gpg -q -a --export A1715D88E1DF1F24 | apt-key add -
-
 		# Launchpad nodejs key C7917B12
 		gpg -q --keyserver keyserver.ubuntu.com --recv-key C7917B12
 		gpg -q -a --export  C7917B12  | apt-key add -
@@ -176,6 +162,16 @@ if [[ $ping_result == *bytes?from* ]]; then
 		# Clean up apt caches
 		apt-get clean
 	fi
+
+	# Make sure we have the latest npm version
+	npm install -g npm
+
+	# xdebug
+	#
+	# XDebug 2.2.3 is provided with the Ubuntu install by default. The PECL
+	# installation allows us to use a later version. Not specifying a version
+	# will load the latest stable.
+	pecl install xdebug
 
 	# ack-grep
 	#
@@ -202,7 +198,7 @@ if [[ $ping_result == *bytes?from* ]]; then
 		chmod +x composer.phar
 		mv composer.phar /usr/local/bin/composer
 
-		COMPOSER_HOME=/usr/local/src/composer composer -q global require --no-update phpunit/phpunit:3.7.*
+		COMPOSER_HOME=/usr/local/src/composer composer -q global require --no-update phpunit/phpunit:4.0.*
 		COMPOSER_HOME=/usr/local/src/composer composer -q global require --no-update phpunit/php-invoker:1.1.*
 		COMPOSER_HOME=/usr/local/src/composer composer -q global require --no-update mockery/mockery:0.8.*
 		COMPOSER_HOME=/usr/local/src/composer composer -q global require --no-update d11wtq/boris:v1.0.2
@@ -265,15 +261,21 @@ echo " * /srv/config/nginx-config/nginx-wp-common.conf -> /etc/nginx/nginx-wp-co
 echo " * /srv/config/nginx-config/sites/               -> /etc/nginx/custom-sites"
 
 # Copy php-fpm configuration from local
+cp /srv/config/php5-fpm-config/php5-fpm.conf /etc/php5/fpm/php5-fpm.conf
 cp /srv/config/php5-fpm-config/www.conf /etc/php5/fpm/pool.d/www.conf
 cp /srv/config/php5-fpm-config/php-custom.ini /etc/php5/fpm/conf.d/php-custom.ini
-cp /srv/config/php5-fpm-config/xdebug.ini /etc/php5/fpm/conf.d/xdebug.ini
-cp /srv/config/php5-fpm-config/apc.ini /etc/php5/fpm/conf.d/apc.ini
+cp /srv/config/php5-fpm-config/opcache.ini /etc/php5/fpm/conf.d/opcache.ini
+cp /srv/config/php5-fpm-config/xdebug.ini /etc/php5/mods-available/xdebug.ini
 
+# Find the path to Xdebug and prepend it to xdebug.ini
+XDEBUG_PATH=$( find /usr -name 'xdebug.so' | head -1 )
+sed -i "1izend_extension=\"$XDEBUG_PATH\"" /etc/php5/mods-available/xdebug.ini
+
+echo " * /srv/config/php5-fpm-config/php5-fpm.conf     -> /etc/php5/fpm/php5-fpm.conf"
 echo " * /srv/config/php5-fpm-config/www.conf          -> /etc/php5/fpm/pool.d/www.conf"
 echo " * /srv/config/php5-fpm-config/php-custom.ini    -> /etc/php5/fpm/conf.d/php-custom.ini"
-echo " * /srv/config/php5-fpm-config/xdebug.ini        -> /etc/php5/fpm/conf.d/xdebug.ini"
-echo " * /srv/config/php5-fpm-config/apc.ini           -> /etc/php5/fpm/conf.d/apc.ini"
+echo " * /srv/config/php5-fpm-config/opcache.ini       -> /etc/php5/fpm/conf.d/opcache.ini"
+echo " * /srv/config/php5-fpm-config/xdebug.ini        -> /etc/php5/mods-available/xdebug.ini"
 
 # Copy memcached configuration from local
 cp /srv/config/memcached-config/memcached.conf /etc/memcached.conf
@@ -298,6 +300,12 @@ echo " * /srv/config/bash_aliases                      -> /home/vagrant/.bash_al
 echo " * /srv/config/vimrc                             -> /home/vagrant/.vimrc"
 echo " * /srv/config/subversion-servers                -> /home/vagrant/.subversion/servers"
 echo " * /srv/config/homebin                           -> /home/vagrant/bin"
+
+# If a bash_prompt file exists in the VVV config/ directory, copy to the VM.
+if [[ -f /srv/config/bash_prompt ]]; then
+	cp /srv/config/bash_prompt /home/vagrant/.bash_prompt
+	echo " * /srv/config/bash_prompt                       -> /home/vagrant/.bash_prompt"
+fi
 
 # RESTART SERVICES
 #
@@ -356,6 +364,11 @@ else
 	echo -e "\nMySQL is not installed. No databases imported."
 fi
 
+# Run wp-cli as vagrant user
+if (( $EUID == 0 )); then
+    wp() { sudo -EH -u vagrant -- wp "$@"; }
+fi
+
 if [[ $ping_result == *bytes?from* ]]; then
 	# WP-CLI Install
 	if [[ ! -d /srv/www/wp-cli ]]; then
@@ -385,6 +398,18 @@ if [[ $ping_result == *bytes?from* ]]; then
 		echo "phpMemcachedAdmin already installed."
 	fi
 
+	# Checkout Opcache Status to provide a dashboard for viewing statistics
+	# about PHP's built in opcache.
+	if [[ ! -d /srv/www/default/opcache-status ]]; then
+		echo -e "\nDownloading Opcache Status, see https://github.com/rlerdorf/opcache-status/"
+		cd /srv/www/default
+		git clone https://github.com/rlerdorf/opcache-status.git opcache-status
+	else
+		echo -e "\nUpdating Opcache Status"
+		cd /srv/www/default/opcache-status
+		git pull --rebase origin master
+	fi
+
 	# Webgrind install (for viewing callgrind/cachegrind files produced by
 	# xdebug profiler)
 	if [[ ! -d /srv/www/default/webgrind ]]; then
@@ -401,48 +426,144 @@ if [[ $ping_result == *bytes?from* ]]; then
 		echo -e "\nDownloading PHP_CodeSniffer (phpcs), see https://github.com/squizlabs/PHP_CodeSniffer"
 		git clone git://github.com/squizlabs/PHP_CodeSniffer.git /srv/www/phpcs
 	else
-		echo -e "\nUpdating PHP_CodeSniffer (phpcs)..."
 		cd /srv/www/phpcs
-		git pull --rebase origin master
+		if [[ $(git rev-parse --abbrev-ref HEAD) == 'master' ]]; then
+			echo -e "\nUpdating PHP_CodeSniffer (phpcs)..."
+			git pull --no-edit origin master
+		else
+			echo -e "\nSkipped updating PHP_CodeSniffer since not on master branch"
+		fi
 	fi
 
 	# Sniffs WordPress Coding Standards
 	if [[ ! -d /srv/www/phpcs/CodeSniffer/Standards/WordPress ]]; then
-		echo -e "\nDownloading WordPress-Coding-Standards, snifs for PHP_CodeSniffer, see https://github.com/WordPress-Coding-Standards/WordPress-Coding-Standards"
+		echo -e "\nDownloading WordPress-Coding-Standards, sniffs for PHP_CodeSniffer, see https://github.com/WordPress-Coding-Standards/WordPress-Coding-Standards"
 		git clone git://github.com/WordPress-Coding-Standards/WordPress-Coding-Standards.git /srv/www/phpcs/CodeSniffer/Standards/WordPress
 	else
-		echo -e "\nUpdating PHP_CodeSniffer..."
 		cd /srv/www/phpcs/CodeSniffer/Standards/WordPress
-		git pull --rebase origin master
+		if [[ $(git rev-parse --abbrev-ref HEAD) == 'master' ]]; then
+			echo -e "\nUpdating PHP_CodeSniffer WordPress Coding Standards..."
+			git pull --no-edit origin master
+		else
+			echo -e "\nSkipped updating PHPCS WordPress Coding Standards since not on master branch"
+		fi
+	fi
+	# Install the standards in PHPCS
+	/srv/www/phpcs/scripts/phpcs --config-set installed_paths ./CodeSniffer/Standards/WordPress/
+	/srv/www/phpcs/scripts/phpcs -i
+
+
+	# Ruby update
+	#
+
+	if [  "$(ruby -v|grep '1.8.7')" ]; then
+		echo "ruby1.8.7 installed"
+		apt-get install -y ruby1.9.3
+	else
+		echo "ruby1.9.3 installed"
+	fi
+
+	# Rubygems update
+	#
+	if [ $(gem -v|grep '^2.') ]; then
+		echo "gem installed"
+	else
+		echo "gem not installed"
+		gem install rubygems-update
+		update_rubygems
+	fi
+
+	# wordmove install
+	#exit
+	wordmove_install="$(gem list wordmove -i)"
+	if [ "$wordmove_install" = true ]; then
+		echo "wordmove installed"
+	else
+		echo "wordmove not installed"
+		gem install wordmove
+
+		wordmove_path="$(gem which wordmove | sed -s 's/.rb/\/deployer\/base.rb/')"
+		if [  "$(grep yaml $wordmove_path)" ]; then
+
+
+			echo "can require yaml"
+		else
+			echo "can't require yaml"
+			echo "set require yaml"
+
+			sed -i "7i require\ \'yaml\'" $wordmove_path
+
+			echo "can require yaml"
+
+			if [[ -f /srv/www/wordpress-default/Movefile ]]; then
+				echo "set movefile"
+			else
+				cd /srv/www/wordpress-default
+				wordmove init
+				echo "init movefile"
+			fi
+
+		fi
+	fi
+
+	# sshpass install
+	#
+	if [  "$(which sshpass)" ]; then
+		echo "sshpass installed"
+	else
+		echo "sshpass not installed"
+		apt-get install sshpass
+		echo "sshpass installed"
+	fi
+
+	# lftp install
+	#
+	if [  "$(which lftp)" ]; then
+		echo "lftp installed"
+	else
+		echo "lftp not installed"
+		apt-get install lftp
+		echo "set ssl:verify-certificate no" > /home/vagrant/.lftprc
+		echo "lftp installed"
 	fi
 
 	# Install and configure the latest stable version of WordPress
 	if [[ ! -d /srv/www/wordpress-default ]]; then
 		echo "Downloading WordPress Stable, see http://wordpress.org/"
 		cd /srv/www/
-		curl -O http://ja.wordpress.org/latest-ja.tar.gz
-		tar -xvf latest-ja.tar.gz
+		curl -O http://wordpress.org/latest.tar.gz
+		tar -xvf latest.tar.gz
 		mv wordpress wordpress-default
-		rm latest-ja.tar.gz
+		rm latest.tar.gz
 		cd /srv/www/wordpress-default
 		echo "Configuring WordPress Stable..."
-		wp core config --dbname=wordpress_default --dbuser=wp --dbpass=wp --quiet --extra-php --allow-root <<PHP
+		wp core config --dbname=wordpress_default --dbuser=wp --dbpass=wp --quiet --extra-php <<PHP
 define( 'WP_DEBUG', true );
 PHP
-		wp core install --url=local.wordpress.dev --quiet --title="Local WordPress Dev" --admin_name=admin --admin_email="admin@local.dev" --admin_password="password" --allow-root 
+		wp core install --url=local.wordpress.dev --quiet --title="Local WordPress Dev" --admin_name=admin --admin_email="admin@local.dev" --admin_password="password"
 	else
 		echo "Updating WordPress Stable..."
 		cd /srv/www/wordpress-default
-		wp core upgrade --allow-root 
+		wp core upgrade
 	fi
+
+	# Test to see if an svn upgrade is needed
+	svn_test=$( svn status -u /srv/www/wordpress-develop/ 2>&1 );
+	if [[ $svn_test == *"svn upgrade"* ]]; then
+		# If the wordpress-develop svn repo needed an upgrade, they probably all need it
+		for repo in $(find /srv/www -maxdepth 5 -type d -name '.svn'); do
+			svn upgrade "${repo/%\.svn/}"
+		done
+	fi;
+
 
 	# Download phpMyAdmin
 	if [[ ! -d /srv/www/default/database-admin ]]; then
-		echo "Downloading phpMyAdmin 4.1.3..."
+		echo "Downloading phpMyAdmin 4.1.14..."
 		cd /srv/www/default
-		wget -q -O phpmyadmin.tar.gz 'http://sourceforge.net/projects/phpmyadmin/files/phpMyAdmin/4.1.3/phpMyAdmin-4.1.3-all-languages.tar.gz/download'
+		wget -q -O phpmyadmin.tar.gz 'http://sourceforge.net/projects/phpmyadmin/files/phpMyAdmin/4.1.14/phpMyAdmin-4.1.14-all-languages.tar.gz/download'
 		tar -xf phpmyadmin.tar.gz
-		mv phpMyAdmin-4.1.3-all-languages database-admin
+		mv phpMyAdmin-4.1.14-all-languages database-admin
 		rm phpmyadmin.tar.gz
 	else
 		echo "PHPMyAdmin already installed."
@@ -451,80 +572,6 @@ PHP
 else
 	echo -e "\nNo network available, skipping network installations"
 fi
-
-# Ruby update
-    #
-
-    if [  "$(ruby -v|grep '1.8.7')" ]; then
-        echo "ruby1.8.7 installed"
-        apt-get install -y ruby1.9.3
-    else
-        echo "ruby1.9.3 installed"
-    fi
-
-    # Rubygems update
-    #
-    if [ $(gem -v|grep '^2.') ]; then
-        echo "gem installed"
-    else
-        echo "gem not installed"
-        gem install rubygems-update
-        update_rubygems
-    fi
-
-    # wordmove install
-    #exit
-    wordmove_install="$(gem list wordmove -i)"
-    if [ "$wordmove_install" = true ]; then
-        echo "wordmove installed"
-    else
-        echo "wordmove not installed"
-        gem install wordmove
-
-        wordmove_path="$(gem which wordmove | sed -s 's/.rb/\/deployer\/base.rb/')"
-        if [  "$(grep yaml $wordmove_path)" ]; then
-
-
-            echo "can require yaml"
-        else
-            echo "can't require yaml"
-            echo "set require yaml"
-
-            sed -i "7i require\ \'yaml\'" $wordmove_path
-
-            echo "can require yaml"
-            
-            if [[ -f /srv/www/wordpress-default/Movefile ]]; then
-            	echo "set movefile"
-            else
-            	cd /srv/www/wordpress-default
-            	wordmove init
-            	echo "init movefile"
-            fi
-
-        fi
-    fi
-
-    # sshpass install
-    #
-    if [  "$(which sshpass)" ]; then
-        echo "sshpass installed"
-    else
-        echo "sshpass not installed"
-        apt-get install sshpass
-        echo "sshpass installed"
-    fi
-
-    # lftp install
-    #
-    if [  "$(which lftp)" ]; then
-        echo "lftp installed"
-    else
-        echo "lftp not installed"
-        apt-get install lftp
-        echo "set ssl:verify-certificate no" > /home/vagrant/.lftprc
-        echo "lftp installed"
-    fi
 
 # Find new sites to setup.
 # Kill previously symlinked Nginx configs
@@ -537,7 +584,7 @@ for SITE_CONFIG_FILE in $(find /srv/www -maxdepth 5 -name 'vvv-init.sh'); do
 	DIR="$(dirname $SITE_CONFIG_FILE)"
 	(
 		cd $DIR
-		bash vvv-init.sh
+		source vvv-init.sh
 	)
 done
 

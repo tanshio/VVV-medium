@@ -13,6 +13,8 @@ Vagrant.configure("2") do |config|
   # Configurations from 1.0.x can be placed in Vagrant 1.1.x specs like the following.
   config.vm.provider :virtualbox do |v|
     v.customize ["modifyvm", :id, "--memory", 512]
+    v.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+    v.customize ["modifyvm", :id, "--natdnsproxy1", "on"]
   end
 
   # Forward Agent
@@ -23,11 +25,10 @@ Vagrant.configure("2") do |config|
 
   # Default Ubuntu Box
   #
-  # This box is provided by Vagrant at vagrantup.com and is a nicely sized (290MB)
-  # box containing the Ubuntu 12.0.4 Precise 32 bit release. Once this box is downloaded
+  # This box is provided by Ubuntu vagrantcloud.com and is a nicely sized (332MB)
+  # box containing the Ubuntu 14.04 Trusty 64 bit release. Once this box is downloaded
   # to your host computer, it is cached for future use under the specified box name.
-  config.vm.box = "precise32"
-  config.vm.box_url = "http://files.vagrantup.com/precise32.box"
+  config.vm.box = "ubuntu/trusty64"
 
   config.vm.hostname = "vvv"
 
@@ -80,9 +81,9 @@ Vagrant.configure("2") do |config|
   # If you are running more than one VM through VirtualBox, different subnets should be used
   # for those as well. This includes other Vagrant boxes.
   config.vm.network :private_network, ip: "192.168.50.4"
-    
+
   # public_network
-  # mac ifconfig / win ipconfig 
+  # mac ifconfig / win ipconfig
   # cd /srv/www/wordpress-default
   # wp search-replace local.wordpress.dev 192.168.**.**
   # Other PC and smartphone can access http://192.168.**.**/
@@ -104,10 +105,19 @@ Vagrant.configure("2") do |config|
   # This directory is used to maintain default database scripts as well as backed
   # up mysql dumps (SQL files) that are to be imported automatically on vagrant up
   config.vm.synced_folder "database/", "/srv/database"
-  if vagrant_version >= "1.3.0"
-    config.vm.synced_folder "database/data/", "/var/lib/mysql", :mount_options => [ "dmode=777", "fmode=777" ]
-  else
-    config.vm.synced_folder "database/data/", "/var/lib/mysql", :extra => 'dmode=777,fmode=777'
+
+  # If the mysql_upgrade_info file from a previous persistent database mapping is detected,
+  # we'll continue to map that directory as /var/lib/mysql inside the virtual machine. Once
+  # this file is changed or removed, this mapping will no longer occur. A db_backup command
+  # is now available inside the virtual machine to backup all databases for future use. This
+  # command is automatically issued on halt, suspend, and destroy if the vagrant-triggers
+  # plugin is installed.
+  if File.exists?(File.join(vagrant_dir,'database/data/mysql_upgrade_info')) then
+    if vagrant_version >= "1.3.0"
+      config.vm.synced_folder "database/data/", "/var/lib/mysql", :mount_options => [ "dmode=777", "fmode=777" ]
+    else
+      config.vm.synced_folder "database/data/", "/var/lib/mysql", :extra => 'dmode=777,fmode=777'
+    end
   end
 
   # /srv/config/
@@ -117,6 +127,12 @@ Vagrant.configure("2") do |config|
   # This directory is currently used to maintain various config files for php and
   # nginx as well as any pre-existing database files.
   config.vm.synced_folder "config/", "/srv/config"
+
+  # /srv/log/
+  #
+  # If a log directory exists in the same directory as your Vagrantfile, a mapped
+  # directory inside the VM will be created for some generated log files.
+  config.vm.synced_folder "log/", "/srv/log", :owner => "www-data"
 
   # /srv/www/
   #
@@ -170,5 +186,32 @@ Vagrant.configure("2") do |config|
   # without having to replace the entire default provisioning script.
   if File.exists?(File.join(vagrant_dir,'provision','provision-post.sh')) then
     config.vm.provision :shell, :path => File.join( "provision", "provision-post.sh" )
+  end
+
+  # Always start MySQL on boot, even when not running the full provisioner
+  # (run: "always" support added in 1.6.0)
+  if vagrant_version >= "1.6.0"
+    config.vm.provision :shell, inline: "sudo service mysql restart", run: "always"
+  end
+
+  # Vagrant Triggers
+  #
+  # If the vagrant-triggers plugin is installed, we can run various scripts on Vagrant
+  # state changes like `vagrant up`, `vagrant halt`, `vagrant suspend`, and `vagrant destroy`
+  #
+  # These scripts are run on the host machine, so we use `vagrant ssh` to tunnel back
+  # into the VM and execute things. By default, each of these scripts calls db_backup
+  # to create backups of all current databases. This can be overridden with custom
+  # scripting. See the individual files in config/homebin/ for details.
+  if defined? VagrantPlugins::Triggers
+    config.trigger.before :halt, :stdout => true do
+      run "vagrant ssh -c 'vagrant_halt'"
+    end
+    config.trigger.before :suspend, :stdout => true do
+      run "vagrant ssh -c 'vagrant_suspend'"
+    end
+    config.trigger.before :destroy, :stdout => true do
+      run "vagrant ssh -c 'vagrant_destroy'"
+    end
   end
 end
