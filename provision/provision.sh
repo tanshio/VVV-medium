@@ -454,15 +454,15 @@ if [[ $ping_result == *bytes?from* ]]; then
 
 
 	# Ruby update
-	#
-	apt-get install -y ruby-dev
-	echo "ruby-dev installed"
+
 
 	# Rubygems update
 	#
 	if [ $(gem -v|grep '^2.') ]; then
 		echo "gem installed"
 	else
+		apt-get install -y ruby-dev
+		echo "ruby-dev installed"
 		echo "gem not installed"
 		gem install rubygems-update
 		update_rubygems
@@ -489,14 +489,6 @@ if [[ $ping_result == *bytes?from* ]]; then
 			sed -i "7i require\ \'yaml\'" $wordmove_path
 
 			echo "can require yaml"
-
-			if [[ -f /srv/www/wordpress-default/Movefile ]]; then
-				echo "set movefile"
-			else
-				cd /srv/www/wordpress-default
-				wordmove init
-				echo "init movefile"
-			fi
 
 		fi
 	fi
@@ -622,6 +614,15 @@ while read hostfile; do
 		fi
 	done < $hostfile
 done
+
+
+if [[ -f /srv/www/wordpress-default/Movefile ]]; then
+	echo "set movefile"
+else
+	cd /srv/www/wordpress-default
+	wordmove init
+	echo "init movefile"
+fi
 
 end_seconds="$(date +%s)"
 echo "-----------------------------"
